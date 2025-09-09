@@ -72,6 +72,6 @@ Outputs:
   ```
   convert out_R.pgm out_R.png
   ```
-- This project is a starting point. If you'd like, I can:
+- This project is a starting point. If you'd like, you can:
   - See QFFT.zip for Apple Silicon Mac OS Application
 
