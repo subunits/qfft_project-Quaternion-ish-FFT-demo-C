@@ -73,7 +73,5 @@ Outputs:
   convert out_R.pgm out_R.png
   ```
 - This project is a starting point. If you'd like, I can:
-  - Implement a chosen QFT definition in C.
-  - Add tests, inverse transform, and visualization scripts.
-  - Provide a prebuilt binary (Linux x86_64) — but tell me your target platform.
+  - See QFFT.zip for Apple Silicon Mac OS Application
 
