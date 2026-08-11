@@ -10,7 +10,7 @@ Unlike standard Fourier transforms that process color channels independently, QF
 
 $$q(m,n) = 0 + r \cdot i + g \cdot j + b \cdot k$$
 
-Using a unit pure quaternion axis \(\mu = \frac{i + j + k}{\sqrt{3}}\)(satisfying \(\mu^2 = -1\)), the forward and inverse transforms apply full 4D hypercomplex arithmetic to preserve inter-channel phase relationships across spatial domain transformations.
+Using a unit pure quaternion axis mu = (i + j + k) / sqrt(3) [where mu^2 = -1], the forward and inverse transforms apply full 4D hypercomplex arithmetic to preserve inter-channel phase relationships across spatial domain transformations.
 
 ---
 
