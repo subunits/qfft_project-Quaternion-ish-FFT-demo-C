@@ -1,8 +1,8 @@
-# Makefile for qfft project
+# Makefile for qfft project (all files in root)
 CC = gcc
 CFLAGS = -O2 -std=c99 -D_GNU_SOURCE -Wall
 LDFLAGS = -lm
-SRC = src/qfft.c
+SRC = qfft.c
 OUT = qfft
 
 # Target bundle directory structure
