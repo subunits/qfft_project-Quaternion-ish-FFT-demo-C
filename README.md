@@ -1,28 +1,74 @@
-# QFFT Project — Quaternion-ish Fourier Transform in C
+# QFFT — Quaternion Fourier Transform in C
 
-This project implements a **per-channel 2D Fourier transform** for RGB images, packaged both as a command-line tool and a Mac OS drag-and-drop `.app` for Apple Silicon. While the project is inspired by quaternion Fourier transforms, it currently **does not implement full quaternion arithmetic**; each color channel is transformed independently.
-
----
-
-## Project Contents
-
-- `src/qfft.c` — C implementation:
-  - Naive 2D DFT per channel.
-  - Optional FFTW-based 2D FFT (`make WITH_FFTW=1`).
-- `Makefile` — build instructions.
-- `test/generate_test_ppm.py` — generates 128×128 `.ppm` test images.
-- `QFFT.app/` — drag-and-drop app bundle for Apple Silicon(zip file).
-- `README.md` — this documentation.
-- `LICENSE` — MIT license.
+A pure, zero-dependency C implementation of the 2D Quaternion Discrete Fourier Transform (QDFT) and Inverse Transform (IQDFT), tailored for full 4D spatial color processing and packaged for Apple Silicon macOS systems.
 
 ---
 
-## Build & Run (Command-Line)
+## Overview
+
+Unlike standard Fourier transforms that process color channels independently, QFFT treats RGB pixel data as pure quaternions in 4D space (\(\mathbb{H}\)):
+
+$$q(m,n) = 0 + r \cdot i + g \cdot j + b \cdot k$$
+
+Using a unit pure quaternion axis \(\mu = \frac{i + j + k}{\sqrt{3}}\)(satisfying \(\mu^2 = -1\)), the forward and inverse transforms apply full 4D hypercomplex arithmetic to preserve inter-channel phase relationships across spatial domain transformations.
+
+---
+
+## Features
+
+- **Full 4D Quaternion Engine:** Implements hypercomplex quaternion multiplication, forward transform, and exact inverse reconstruction.
+- **Zero External Dependencies:** Built entirely with standard C libraries (`math.h`, `stdlib.h`, `stdio.h`).
+- **Apple Silicon Optimized:** Native ARM compilation flag configuration with low overhead memory allocation routines.
+- **App Bundle Packaging:** Automated target directory structure setup for native macOS `.app` distribution.
+
+---
+
+## Build & Run
 
 ### Prerequisites
-- C compiler (`gcc` or `clang`).
-- Optional: FFTW3 development libraries.
+- C Compiler (`gcc` or `clang`)
+- `make` utility
 
-### Build naive DFT
+### Compilation
+
+Build the executable and package the macOS app bundle:
+
 ```bash
 make
+```
+
+To clean build artifacts:
+
+```bash
+make clean
+```
+
+### Execution
+
+Run the binary directly from the terminal:
+
+```bash
+./qfft
+```
+
+Or execute from the packaged bundle:
+
+```bash
+./QFFT.app/Contents/MacOS/qfft
+```
+
+---
+
+## Repository Structure
+
+- `qfft.c` — Core C source code containing quaternion matrix routines, `forward_qfft`, `inverse_qfft`, and test runner.
+- `Makefile` — Build automation rules and `.app` bundle structure assembler.
+- `QFFT.app/` — Standalone macOS application bundle directory.
+- `README.md` — Project documentation.
+- `LICENSE` — MIT License.
+
+---
+
+## License
+
+MIT License
