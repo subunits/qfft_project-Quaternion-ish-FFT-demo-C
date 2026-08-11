@@ -6,7 +6,7 @@ A pure, zero-dependency C implementation of the 2D Quaternion Discrete Fourier T
 
 ## Overview
 
-Unlike standard Fourier transforms that process color channels independently, QFFT treats RGB pixel data as pure quaternions in 4D space (\(\mathbb{H}\)):
+Unlike standard Fourier transforms that process color channels independently, QFFT treats RGB pixel data as pure quaternions in 4D space (H): (\(\mathbb{H}\)):
 
 $$q(m,n) = 0 + r \cdot i + g \cdot j + b \cdot k$$
 
