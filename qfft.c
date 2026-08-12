@@ -7,9 +7,12 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/* Tolerance for scalar (w) drift check after inverse transform */
+#define W_DRIFT_EPSILON 1e-6
+
 /* ---------------------------------------------------------------------------
  * Quaternion structure
- *   w  – scalar (real) part
+ *   w  – scalar (real) part  (must be 0 for pure-quaternion image pixels)
  *   x  – i component  (Red channel)
  *   y  – j component  (Green channel)
  *   z  – k component  (Blue channel)
@@ -22,7 +25,8 @@ typedef struct {
 } Quaternion;
 
 /* Pure unit quaternion used as the transform axis μ.
- * The caller is responsible for ensuring |μ| = 1.
+ * The caller is responsible for ensuring |μ| = 1; use make_pure_unit_quat()
+ * to construct one safely rather than filling the struct directly.
  * Both the left and right exponential kernels share the same μ,
  * which is the standard single-axis 2-D QFFT convention. */
 typedef struct {
@@ -31,17 +35,48 @@ typedef struct {
     double z;
 } PureUnitQuat;
 
+/* ---------------------------------------------------------------------------
+ * Construct and validate a PureUnitQuat.
+ * Normalizes the input vector and aborts if it is near-zero.
+ * -------------------------------------------------------------------------*/
+static PureUnitQuat make_pure_unit_quat(double x, double y, double z) {
+    double norm = sqrt(x*x + y*y + z*z);
+    if (norm < 1e-12) {
+        fprintf(stderr, "make_pure_unit_quat: zero-length axis vector\n");
+        exit(EXIT_FAILURE);
+    }
+    PureUnitQuat mu = { x/norm, y/norm, z/norm };
+    return mu;
+}
+
 /* Default axis: μ = (i + j + k) / √3 */
 static PureUnitQuat default_mu(void) {
-    double inv = 1.0 / sqrt(3.0);
-    PureUnitQuat mu = { inv, inv, inv };
-    return mu;
+    return make_pure_unit_quat(1.0, 1.0, 1.0);
+}
+
+/* ---------------------------------------------------------------------------
+ * Input validation
+ * -------------------------------------------------------------------------*/
+static void validate_dimensions(int width, int height) {
+    if (width <= 0 || height <= 0) {
+        fprintf(stderr, "validate_dimensions: width and height must be > 0 "
+                "(got %d x %d)\n", width, height);
+        exit(EXIT_FAILURE);
+    }
+    /* Warn (don't abort) on non-power-of-two — valid but may surprise callers
+     * expecting FFT-style constraints. */
+    if ((width & (width - 1)) != 0 || (height & (height - 1)) != 0) {
+        fprintf(stderr, "WARNING: dimensions %d x %d are not powers of two. "
+                "The DFT is still correct but a future FFT optimisation will "
+                "require power-of-two sizes.\n", width, height);
+    }
 }
 
 /* ---------------------------------------------------------------------------
  * Memory helpers
  * -------------------------------------------------------------------------*/
 Quaternion **allocate_qmatrix(int width, int height) {
+    validate_dimensions(width, height);
     Quaternion **mat = (Quaternion **)malloc(height * sizeof(Quaternion *));
     if (!mat) {
         fprintf(stderr, "allocate_qmatrix: outer malloc failed\n");
@@ -178,14 +213,17 @@ void inverse_qfft(Quaternion **freq, Quaternion **spatial,
 }
 
 /* ---------------------------------------------------------------------------
- * Clamp all pixel channels of a reconstructed matrix to [0, 255].
+ * Clamp RGB channels of a reconstructed matrix to [0, 255].
  * Floating-point accumulation can push values slightly out of range.
+ *
+ * NOTE: The scalar w channel is intentionally NOT clamped here.
+ *       w should remain near zero for pure-quaternion input; clamping it
+ *       to [0,255] would silently mask corruption. Use
+ *       print_reconstruction_error() to assert w drift stays below epsilon.
  * -------------------------------------------------------------------------*/
 void clamp_pixels(Quaternion **mat, int width, int height) {
     for (int i = 0; i < height; i++) {
         for (int j = 0; j < width; j++) {
-            /* w should remain near 0; clamp it too for safety */
-            mat[i][j].w = clamp(mat[i][j].w, 0.0, 255.0);
             mat[i][j].x = clamp(mat[i][j].x, 0.0, 255.0);
             mat[i][j].y = clamp(mat[i][j].y, 0.0, 255.0);
             mat[i][j].z = clamp(mat[i][j].z, 0.0, 255.0);
@@ -198,7 +236,8 @@ void clamp_pixels(Quaternion **mat, int width, int height) {
  * -------------------------------------------------------------------------*/
 
 /* Compute max absolute error across all pixels and all RGB channels.
- * Also checks that the scalar (w) channel returned to near-zero. */
+ * Also asserts that the scalar (w) channel stayed near zero.
+ * Exits with an error message if w drift exceeds W_DRIFT_EPSILON. */
 static void print_reconstruction_error(Quaternion **original,
                                        Quaternion **reconstructed,
                                        int width, int height) {
@@ -213,12 +252,19 @@ static void print_reconstruction_error(Quaternion **original,
                 fabs(original[i][j].y - reconstructed[i][j].y));
             max_rgb_err = fmax(max_rgb_err,
                 fabs(original[i][j].z - reconstructed[i][j].z));
-            /* w was 0 in all input pixels; verify it stayed near 0 */
             max_w_err = fmax(max_w_err, fabs(reconstructed[i][j].w));
         }
     }
+
     printf("Max RGB reconstruction error : %e\n", max_rgb_err);
-    printf("Max scalar (w) drift         : %e  (expect ~0)\n", max_w_err);
+    printf("Max scalar (w) drift         : %e  (limit: %e)\n",
+           max_w_err, W_DRIFT_EPSILON);
+
+    if (max_w_err > W_DRIFT_EPSILON) {
+        fprintf(stderr, "ERROR: scalar w drift %.6e exceeds epsilon %.6e — "
+                "transform may be corrupt\n", max_w_err, W_DRIFT_EPSILON);
+        exit(EXIT_FAILURE);
+    }
 }
 
 /* ---------------------------------------------------------------------------
@@ -235,10 +281,12 @@ int main(void) {
     const double R_SCALE = 15.0;
     const double C_SCALE = 20.0;
 
-    PureUnitQuat mu = default_mu();   /* μ = (i+j+k)/√3 — change here if needed */
+    /* μ = (i+j+k)/√3 — auto-normalized; change args to make_pure_unit_quat()
+     * to use a different axis without recompiling. */
+    PureUnitQuat mu = default_mu();
 
-    Quaternion **input        = allocate_qmatrix(WIDTH, HEIGHT);
-    Quaternion **freq         = allocate_qmatrix(WIDTH, HEIGHT);
+    Quaternion **input         = allocate_qmatrix(WIDTH, HEIGHT);
+    Quaternion **freq          = allocate_qmatrix(WIDTH, HEIGHT);
     Quaternion **reconstructed = allocate_qmatrix(WIDTH, HEIGHT);
 
     /* Initialise spatial colour data; scalar part w = 0 throughout */
@@ -257,7 +305,7 @@ int main(void) {
     printf("Executing Inverse QFFT...\n");
     inverse_qfft(freq, reconstructed, WIDTH, HEIGHT, mu);
 
-    /* Clamp pixel values to [0,255] before any downstream use */
+    /* Clamp RGB to [0,255]; w is left untouched so drift is detectable */
     clamp_pixels(reconstructed, WIDTH, HEIGHT);
 
     /* --- Spot-check a single pixel --- */
@@ -267,7 +315,7 @@ int main(void) {
     printf("  Reconstructed RGB : (%.2f, %.2f, %.2f)\n",
            reconstructed[2][2].x, reconstructed[2][2].y, reconstructed[2][2].z);
 
-    /* --- Full-matrix error report --- */
+    /* --- Full-matrix error report (exits on w drift violation) --- */
     printf("\nFull-matrix validation:\n");
     print_reconstruction_error(input, reconstructed, WIDTH, HEIGHT);
 
